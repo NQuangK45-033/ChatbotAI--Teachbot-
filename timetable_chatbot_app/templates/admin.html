@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Trang Quản trị{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <h1>Bảng điều khiển của Quản trị viên</h1>
+    <p>Chọn một bảng để xem và quản lý dữ liệu.</p>
+
+    <div class="admin-tabs">
+        <button class="tab-button active" onclick="loadTable('teachers', this)">Giáo viên</button>
+        <button class="tab-button" onclick="loadTable('subjects', this)">Môn học</button>
+        <button class="tab-button" onclick="loadTable('classes', this)">Lớp học</button>
+        <button class="tab-button" onclick="loadTable('schedule_entries', this)">Thời khóa biểu</button>
+    </div>
+
+    <div class="table-container">
+        <h3 id="table-title"></h3>
+        <div id="admin-table-content">
+            <!-- Dữ liệu bảng sẽ được tải vào đây bằng JavaScript -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Hàm để tải dữ liệu bảng
+    async function loadTable(tableName, element) {
+        // Cập nhật trạng thái active cho button
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        element.classList.add('active');
+
+        document.getElementById('table-title').innerText = `Bảng: ${tableName}`;
+        const contentDiv = document.getElementById('admin-table-content');
+        contentDiv.innerHTML = '<p>Đang tải dữ liệu...</p>';
+
+        try {
+            const response = await fetch(`/api/tables/${tableName}`);
+            if (!response.ok) throw new Error('Không thể tải dữ liệu.');
+            
+            const data = await response.json();
+            
+            if (data.length === 0) {
+                contentDiv.innerHTML = '<p>Bảng này không có dữ liệu.</p>';
+                return;
+            }
+
+            const headers = Object.keys(data[0]);
+            let tableHtml = '<table class="admin-table"><thead><tr>';
+            headers.forEach(h => tableHtml += `<th>${h}</th>`);
+            tableHtml += '<th>Hành động</th></tr></thead><tbody>';
+
+            data.forEach(row => {
+                tableHtml += '<tr>';
+                headers.forEach(h => tableHtml += `<td>${row[h]}</td>`);
+                
+                // Xác định khóa chính để xóa (ví dụ)
+                let pk_col, pk_val;
+                if ('ID_Teacher' in row) { pk_col = 'ID_Teacher'; pk_val = row.ID_Teacher; }
+                else if ('ID_Subject' in row) { pk_col = 'ID_Subject'; pk_val = row.ID_Subject; }
+                else if ('ID_Class' in row) { pk_col = 'ID_Class'; pk_val = row.ID_Class; }
+                else if ('ID_TKB' in row) { pk_col = 'ID_TKB'; pk_val = row.ID_TKB; }
+                
+                if (pk_col) {
+                    tableHtml += `<td><button class="btn-delete" onclick="deleteEntry('${tableName}', '${pk_col}', '${pk_val}')">Xóa</button></td>`;
+                } else {
+                    tableHtml += '<td></td>';
+                }
+                tableHtml += '</tr>';
+            });
+
+            tableHtml += '</tbody></table>';
+            contentDiv.innerHTML = tableHtml;
+
+        } catch (error) {
+            contentDiv.innerHTML = `<p style="color: red;">Lỗi: ${error.message}</p>`;
+        }
+    }
+
+    // Hàm xóa một bản ghi
+    async function deleteEntry(table, pk_col, pk_val) {
+        if (!confirm(`Bạn có chắc chắn muốn xóa bản ghi '${pk_val}' khỏi bảng '${table}'?`)) {
+            return;
+        }
+        try {
+            const response = await fetch('/api/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table, pk_col, pk_val })
+            });
+            const result = await response.json();
+            alert(result.message);
+            if (result.status === 'success') {
+                // Tải lại bảng hiện tại
+                document.querySelector('.tab-button.active').click();
+            }
+        } catch (error) {
+            alert('Lỗi khi thực hiện yêu cầu xóa.');
+        }
+    }
+
+    // Tải bảng đầu tiên khi trang được mở
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelector('.tab-button').click();
+    });
+</script>
+{% endblock %}
